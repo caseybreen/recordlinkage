@@ -1,0 +1,136 @@
+---
+title: "Scratch Code for Simulations"
+author: Casey Breen
+---
+
+Summary: Run some record linkage simulations
+
+```{r}
+library(data.table)
+library(tidyverse)
+library(cowplot)
+library(here)
+library(scales)
+```
+
+```{r}
+censoc_numident <- fread("/censoc/data/working_files/numident_v2.1_middle_initials.csv")
+```
+
+```{r}
+censoc_numident_subset <- censoc_numident %>% 
+  filter(!is.na(race) & !is.na(race_first) & middle_name_numident != "" & middle_name_census != "")
+```
+
+```{r}
+analysis_sample <- censoc_numident_subset %>% 
+  filter(link_abe_exact_conservative == 1) %>% 
+  filter(byear %in% 1910:1915) %>% 
+  filter(race %in% c(100, 200)) %>% 
+  filter(race_first %in% c(1, 2)) %>% 
+  mutate(race_census = case_when(
+    race == 100 ~ "White",
+    race == 200 ~ "Black",
+    TRUE ~ NA_character_
+  )) %>% 
+  mutate(race_numident = case_when(
+    race_first == 1 ~ "White",
+    race_first == 2 ~ "Black",
+    TRUE ~ NA_character_
+  )) %>% 
+  filter(!is.na(race_census) & !is.na(race_numident)) %>% 
+  filter(middle_name_numident == middle_name_census) %>% 
+  sample_n(100000)
+
+```
+
+
+```{r}
+summary(lm(data = analysis_sample, death_age ~ educ_yrs + as.factor(byear)))
+
+analysis_sample %>% 
+  group_by(race_census) %>% 
+  summarize(mean(race_census != race_numident)) 
+``` 
+
+```{r}
+## create lists 
+results_lm <- list()
+results_racial_change <- list()
+
+## carry out simulations 
+for (i in seq(1500, 15000, by = 1500)) {
+race_numident_resample <- c(sample(analysis_sample$race_numident[1:i]), analysis_sample$race_numident[(i+1):100000])
+death_age_numident_resample <- c(sample(analysis_sample$death_age[1:i]), analysis_sample$death_age[(i+1):100000])
+
+## create data.frame 
+df <- tibble(race_numident = race_numident_resample, 
+             death_age = death_age_numident_resample,
+             educ_yrs = analysis_sample$educ_yrs,
+             race_census = analysis_sample$race_census,
+             byear = analysis_sample$byear)
+
+## run linear model 
+results_lm[[i]] <- broom::tidy(lm(death_age ~ educ_yrs + as.factor(byear), data = df)) %>% 
+  filter(term == "educ_yrs") %>% 
+  mutate(false_matches = i / 100000)
+
+## calculate rates of passing 
+results_racial_change[[i]] <- df %>% 
+  group_by(race_census) %>% 
+  summarize(race_change = mean(race_numident != race_census)) %>% 
+  mutate(false_matches = i / 100000)
+  
+cat(i, "\n")
+
+}
+
+## results race change 
+results_lm <- bind_rows(results_lm)
+results_race_change <- bind_rows(results_racial_change)
+
+## results 
+lm_plot <- results_lm %>% 
+  add_row(estimate = 0.107899, std.error = 0.005095, false_matches = 0) %>% 
+  ggplot(aes(x = false_matches, y = estimate, ymin = estimate - 1.96 * std.error, ymax = estimate + 1.96 * std.error)) + 
+    geom_line() + 
+  geom_pointrange( fill = "white", shape = 21, size = 1) + 
+  cowplot::theme_cowplot() + 
+  ylim(0, 0.12) + 
+  labs(x = "False Match Rate",
+       y = "Regression Coefficient",
+       title = "Education (yrs) and longevity") + 
+  geom_hline(yintercept = 0.107899, color = "grey", linetype = "longdash") + 
+  scale_x_continuous(labels = scales::percent)
+
+ggsave(plot = lm_plot, filename = here("figures/lm_plot.png"), width = 6.4, height = 5)
+
+
+## color scheme 
+cud <- c("#D55E00", "#56B4E9", "#009E73", "#CC79A7", "#0072B2", "#E69F00",
+         "#F0E442", "#999999")
+
+## results 
+race_plot <- results_race_change %>% 
+  filter(race_census == "Black") %>% 
+  add_row(race_change = 0.0922, false_matches = 0) %>% 
+  mutate(se = sqrt(race_change * (1-race_change) / 2000)) %>% 
+  ggplot(aes(x = false_matches, y = race_change, ymin = race_change - 1.96 * se, ymax = race_change + 1.96 * se)) + 
+  geom_line() + 
+  geom_pointrange(fill = "white", size = 1, shape = 21) + 
+  cowplot::theme_cowplot() + 
+  scale_x_continuous(labels = scales::percent, breaks = pretty_breaks(n = 6)) + 
+  scale_y_continuous(labels = scales::percent, breaks = pretty_breaks(n = 6), limits = c(0, 0.42)) +
+  scale_shape_manual(values = c(21, 23)) + 
+  scale_color_manual(values = cud) +  
+  labs(x = "False Match Rate",
+       y = "Shift in Race",
+       title = "Shift in Racial Classification") + 
+  geom_hline(yintercept = 0.0922, color = "grey", linetype = "longdash") + 
+  theme(legend.position = "bottom", legend.title= element_blank()) 
+
+ggsave(plot = race_plot, filename = here("figures/race_plot_single.png"), width = 6.4, height = 5)
+
+```
+
+

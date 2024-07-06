@@ -1,0 +1,307 @@
+---
+title: "Record Linkage Analysis"
+author: Casey Breen
+---
+
+Summary: Investigate how choice of record linkage algorithm affects research results 
+
+```{r}
+## library packages 
+library(tidyverse)
+library(data.table)
+library(here)
+library(cowplot)
+```
+
+
+```{r}
+## read in census data 
+census_1930 <- fread("~/IPUMS2019/1930/TSV/P.tsv", select = c("SEX", "AGE", "HISTID", "LIT", "RACE", "OCCSCORE", "STATE")) %>% 
+  janitor::clean_names() %>% 
+  filter(sex == 1) %>% 
+  rename_all(~ paste(., "1930", sep = "_"))
+
+census_1940 <- fread("~/IPUMS2019/1940/TSV/P.tsv", select = c("SEX", "HISTID", "AGE", "EDUC", "INCWAGE", "LIT", "RACE", "OCCSCORE", "STATE")) %>% 
+  janitor::clean_names() %>% 
+  filter(sex == 1) %>% 
+  rename_all(~ paste(., "1940", sep = "_")) 
+```
+
+
+```{r}
+## read in crosswalks 
+mlp <- fread("~/workspace/home-ownership/data/mlp_1930_1940_csv_v1_0/mlp_1930_1940_v1.0.csv", select = c("histid_1940", "histid_1930"))
+
+abe <- fread("/90days/casey/crosswalk_1930_1940.csv")
+```
+
+
+
+
+```{r}
+census_1930_30 <- census_1930 %>%
+  filter(age_1930 == 30)
+
+census_1930_30 <- census_1930_30 %>% 
+  inner_join(mlp, by = "histid_1930")
+
+linked_data_mlp <- census_1930_30 %>% 
+  inner_join(census_1940, by = "histid_1940")
+```
+
+```{r}
+census_1930_30 <- census_1930 %>%
+  filter(age_1930 == 30)
+
+census_1930_30 <- census_1930_30 %>% 
+  inner_join(abe, by = "histid_1930")
+
+linked_data_abe <- census_1930_30 %>% 
+  inner_join(census_1940, by = "histid_1940")
+```
+
+## social mobility change 
+
+```{r}
+linked_data_abe_occ <- linked_data_abe %>% 
+  filter(occscore_1930 != 0 & occscore_1940 != 0) %>% 
+  mutate(occ_decile_1930 = ntile(occscore_1930, 10),
+         occ_decile_1940 = ntile(occscore_1940, 10)) 
+
+linked_data_mlp_occ <- linked_data_mlp %>% 
+  filter(occscore_1930 != 0 & occscore_1940 != 0) %>% 
+  mutate(occ_decile_1930 = ntile(occscore_1930, 10),
+         occ_decile_1940 = ntile(occscore_1940, 10)) 
+
+abe_nysiis_conservative_change <- linked_data_abe_occ %>% 
+  filter(abe_nysiis_conservative == 1) %>% 
+  summarize(rate = mean(abs(occ_decile_1930 - occ_decile_1940) > 5),
+            se = sqrt(mean(abs(occ_decile_1930 - occ_decile_1940) > 5) * (1-mean(abs(occ_decile_1930 - occ_decile_1940) > 5))/n()),
+            algorithm = "abe_nysiis_conservative") 
+
+abe_nysiis_standard_change <- linked_data_abe_occ %>% 
+  filter(abe_nysiis_standard == 1) %>% 
+  summarize(rate = mean(abs(occ_decile_1930 - occ_decile_1940) > 5),
+            se = sqrt(mean(abs(occ_decile_1930 - occ_decile_1940) > 5) * (1-mean(abs(occ_decile_1930 - occ_decile_1940) > 5))/n()),
+            algorithm = "abe_nysiis_standard") 
+
+abe_exact_standard_change <- linked_data_abe_occ %>% 
+  filter(abe_exact_standard == 1) %>% 
+  summarize(rate = mean(abs(occ_decile_1930 - occ_decile_1940) > 5),
+            se = sqrt(mean(abs(occ_decile_1930 - occ_decile_1940) > 5) * (1-mean(abs(occ_decile_1930 - occ_decile_1940) > 5))/n()),
+            algorithm = "abe_exact_standard")
+
+abe_exact_conservative_change <- linked_data_abe_occ %>% 
+  filter(abe_exact_conservative == 1) %>% 
+  summarize(rate = mean(abs(occ_decile_1930 - occ_decile_1940) > 5),
+            se = sqrt(mean(abs(occ_decile_1930 - occ_decile_1940) > 5) * (1-mean(abs(occ_decile_1930 - occ_decile_1940) > 5))/n()),
+            algorithm = "abe_exact_conservative")
+
+mlp <- linked_data_mlp_occ %>% 
+  summarize(rate = mean(abs(occ_decile_1930 - occ_decile_1940) > 5),
+            se = sqrt(mean(abs(occ_decile_1930 - occ_decile_1940) > 5) * (1-mean(abs(occ_decile_1930 - occ_decile_1940) > 5))/n()),
+            algorithm = "mlp")
+
+results <- bind_rows(abe_nysiis_conservative_change, abe_nysiis_standard_change, abe_exact_standard_change, abe_exact_conservative_change, mlp)
+
+social_mobility_shifts <- results %>% 
+mutate(algorithm_cat = case_when(
+    algorithm == "abe_exact_conservative" ~ "ABE Exact",
+    algorithm == "abe_exact_standard" ~ "ABE Exact", 
+    algorithm == "abe_nysiis_conservative" ~ "ABE NYSIIS", 
+    algorithm == "abe_nysiis_standard" ~ "ABE NYSIIS", 
+    algorithm == "mlp" ~ "IPUMS MLP"
+  )) %>% 
+   mutate(type = case_when(
+    algorithm == "abe_exact_conservative" ~ "Conservative  ",
+    algorithm == "abe_exact_standard" ~ "Standard", 
+    algorithm == "abe_nysiis_conservative" ~ "Conservative  ", 
+    algorithm == "abe_nysiis_standard" ~ "Standard", 
+    algorithm == "mlp" ~ "Standard"
+  )) %>% 
+  ggplot(aes(x = reorder(algorithm_cat, rate), color = type, shape = type, y = rate, ymin = rate - 1.96*se, ymax = rate + 1.96*se)) + 
+  geom_pointrange(fill = "white", size = 1, position = position_dodge2(0.2)) + 
+  theme_cowplot() + 
+  labs(x = "Algorithm",
+       y = ">50% percentile rank change",
+       title = "Social Mobility ") + 
+#  ylim(10, 15) + 
+  scale_shape_manual(values = c(21, 23)) + 
+  scale_color_manual(values = cud) +
+  theme(legend.position = "bottom", legend.title=element_blank()) +
+  scale_y_continuous(labels = scales::percent, limits = c(0, 0.09)) + 
+  geom_hline(aes(yintercept = mean(rate)), color = "grey", linetype = "dashed")
+```
+
+## race change 
+
+```{r}
+
+abe_nysiis_conservative_change <- linked_data_abe %>% 
+  filter(abe_nysiis_conservative == 1) %>% 
+  summarize(rate = mean(race_1930 != race_1940),
+            se = sqrt(mean(race_1930 != race_1940) * (1-mean(race_1930 != race_1940))/n()),
+            algorithm = "abe_nysiis_conservative") 
+
+abe_nysiis_standard_change <- linked_data_abe %>% 
+  filter(abe_nysiis_standard == 1) %>% 
+  summarize(rate = mean(race_1930 != race_1940),
+                  se = sqrt(mean(race_1930 != race_1940) * (1-mean(race_1930 != race_1940))/n()),
+            algorithm = "abe_nysiis_standard")
+
+abe_exact_standard_change <- linked_data_abe %>% 
+  filter(abe_exact_standard == 1) %>% 
+  summarize(rate = mean(race_1930 != race_1940),
+                        se = sqrt(mean(race_1930 != race_1940) * (1-mean(race_1930 != race_1940))/n()),
+            algorithm = "abe_exact_standard")
+
+abe_exact_conservative_change <- linked_data_abe %>% 
+  filter(abe_exact_conservative == 1) %>% 
+  summarize(rate = mean(race_1930 != race_1940),
+                        se = sqrt(mean(race_1930 != race_1940) * (1-mean(race_1930 != race_1940))/n()),
+            algorithm = "abe_exact_conservative")
+
+mlp <- linked_data_mlp %>% 
+  summarize(rate = mean(race_1930 != race_1940),
+                        se = sqrt(mean(race_1930 != race_1940) * (1-mean(race_1930 != race_1940))/n()),
+            algorithm = "mlp")
+
+
+results <- bind_rows(abe_nysiis_conservative_change, abe_nysiis_standard_change, abe_exact_standard_change, abe_exact_conservative_change, mlp)
+
+race_shift <- results %>% 
+mutate(algorithm_cat = case_when(
+    algorithm == "abe_exact_conservative" ~ "ABE Exact",
+    algorithm == "abe_exact_standard" ~ "ABE Exact", 
+    algorithm == "abe_nysiis_conservative" ~ "ABE NYSIIS", 
+    algorithm == "abe_nysiis_standard" ~ "ABE NYSIIS", 
+    algorithm == "mlp" ~ "IPUMS MLP"
+  )) %>% 
+   mutate(type = case_when(
+    algorithm == "abe_exact_conservative" ~ "Conservative  ",
+    algorithm == "abe_exact_standard" ~ "Standard", 
+    algorithm == "abe_nysiis_conservative" ~ "Conservative  ", 
+    algorithm == "abe_nysiis_standard" ~ "Standard", 
+    algorithm == "mlp" ~ "Standard"
+  )) %>% 
+  ggplot(aes(x = reorder(algorithm_cat, rate), color = type, shape = type, y = rate, ymin = rate - 1.96*se, ymax = rate + 1.96*se)) + 
+  geom_pointrange(fill = "white", size = 1, position = position_dodge2(0.2)) + 
+  theme_cowplot() + 
+  labs(x = "Algorithm",
+       y = "Shift in race",
+       title = "Shifts in racial classification") + 
+#  ylim(10, 15) + 
+  scale_shape_manual(values = c(21, 23)) + 
+  scale_color_manual(values = cud) +
+  theme(legend.position = "bottom", legend.title=element_blank()) +
+  scale_y_continuous(labels = scales::percent, limits = c(0, 0.05)) + 
+  geom_hline(aes(yintercept = mean(rate)), color = "grey", linetype = "dashed")
+
+## shifts in social mobility 
+transition_plot <- cowplot::plot_grid(race_shift, social_mobility_shifts, labels = "auto")
+
+ggsave(plot = transition_plot, filename = here("figures/transition_plot.png"), width = 10, height = 5)
+
+```
+
+## race regression 
+
+```{r}
+model_1 <- broom::tidy(lm(data = linked_data_mlp %>% filter(race_1930 == 100 | race_1930 == 200) %>% filter(incwage_1940 %in% c(1:5005)), incwage_1940 ~ as.factor(race_1930))) %>% mutate(algorithm = "mlp")
+
+model_2 <- broom::tidy(lm(data = linked_data_abe %>% filter(race_1930 == 100 | race_1930 == 200) %>% filter(abe_exact_conservative == 1) %>% filter(incwage_1940 %in% c(1:5005)), incwage_1940 ~ as.factor(race_1930))) %>% mutate(algorithm = "abe_exact_conservative")
+
+model_3 <- broom::tidy(lm(data = linked_data_abe %>% filter(race_1930 == 100 | race_1930 == 200) %>% filter(abe_exact_standard == 1) %>% filter(incwage_1940 %in% c(1:5005)), incwage_1940 ~ as.factor(race_1930))) %>% mutate(algorithm = "abe_exact_standard")
+
+model_4 <- broom::tidy(lm(data = linked_data_abe %>% filter(race_1930 == 100 | race_1930 == 200) %>% filter(abe_nysiis_conservative == 1)  %>% filter(incwage_1940 %in% c(1:5005)), incwage_1940 ~ as.factor(race_1930)))  %>% mutate(algorithm = "abe_nysiis_conservative")
+
+model_5 <- broom::tidy(lm(data = linked_data_abe %>% filter(race_1930 == 100 | race_1930 == 200) %>% filter(abe_nysiis_standard == 1) %>% filter(incwage_1940 %in% c(1:5005)), incwage_1940 ~ as.factor(race_1930)))  %>% mutate(algorithm = "abe_nysiis_standard")
+
+## color scheme 
+cud <- c("#D55E00", "#56B4E9", "#009E73", "#CC79A7", "#0072B2", "#E69F00",
+         "#F0E442", "#999999")
+
+regression_example_race <- bind_rows(model_1, model_2, model_3, model_4, model_5) %>% 
+  mutate(algorithm_cat = case_when(
+    algorithm == "abe_exact_conservative" ~ "ABE Exact",
+    algorithm == "abe_exact_standard" ~ "ABE Exact", 
+    algorithm == "abe_nysiis_conservative" ~ "ABE NYSIIS", 
+    algorithm == "abe_nysiis_standard" ~ "ABE NYSIIS", 
+    algorithm == "mlp" ~ "IPUMS MLP"
+  )) %>% 
+   mutate(type = case_when(
+    algorithm == "abe_exact_conservative" ~ "Conservative  ",
+    algorithm == "abe_exact_standard" ~ "Standard", 
+    algorithm == "abe_nysiis_conservative" ~ "Conservative  ", 
+    algorithm == "abe_nysiis_standard" ~ "Standard", 
+    algorithm == "mlp" ~ "Standard"
+  )) %>% 
+  filter(term == "as.factor(race_1930)200") %>% 
+  ggplot(aes(x = reorder(algorithm_cat, estimate), color = type, shape = type, y = estimate, ymin = estimate - 1.96*std.error, ymax = estimate + 1.96*std.error)) + 
+  geom_pointrange(fill = "white", size = 1, position = position_dodge2(0.2)) + 
+  theme_cowplot() + 
+  labs(x = "Algorithm", 
+       y = "Regression Coefficient",
+       title = "Race") + 
+#  ylim(10, 15) + 
+  scale_shape_manual(values = c(21, 23)) + 
+  scale_color_manual(values = cud) +
+  theme(legend.position = "bottom", legend.title=element_blank()) + 
+  ylim(0, -900) + 
+  geom_hline(aes(yintercept = mean(estimate)), color = "grey", linetype = "dashed")
+```
+
+
+
+```{r}
+## 
+model_1 <- broom::tidy(lm(data = linked_data_mlp %>% filter(race_1930 == 100 | race_1930 == 200) %>% filter(incwage_1940 %in% c(1:5005)) %>% filter(sex_1930 == 1), incwage_1940 ~ occscore_1930)) %>% mutate(algorithm = "mlp")
+
+## 
+model_2 <- broom::tidy(lm(data = linked_data_abe %>% filter(race_1930 == 100 | race_1930 == 200) %>% filter(abe_exact_conservative == 1) %>% filter(incwage_1940 %in% c(1:5005)), incwage_1940 ~ occscore_1930)) %>% mutate(algorithm = "abe_exact_conservative")
+
+## 
+model_3 <- broom::tidy(lm(data = linked_data_abe %>% filter(race_1930 == 100 | race_1930 == 200) %>% filter(abe_exact_standard == 1) %>% filter(incwage_1940 %in% c(1:5005)), incwage_1940 ~ occscore_1930)) %>% mutate(algorithm = "abe_exact_standard")
+
+model_4 <- broom::tidy(lm(data = linked_data_abe %>% filter(race_1930 == 100 | race_1930 == 200) %>% filter(abe_nysiis_conservative == 1) %>% filter(incwage_1940 %in% c(1:5005)), incwage_1940 ~ occscore_1930)) %>% mutate(algorithm = "abe_nysiis_conservative")
+
+model_5 <- broom::tidy(lm(data = linked_data_abe %>% filter(race_1930 == 100 | race_1930 == 200) %>% filter(abe_nysiis_standard == 1) %>% filter(incwage_1940 %in% c(1:5005)), incwage_1940 ~ occscore_1930)) %>% mutate(algorithm = "abe_nysiis_standard")
+
+## color scheme 
+cud <- c("#D55E00", "#56B4E9", "#009E73", "#CC79A7", "#0072B2", "#E69F00",
+         "#F0E442", "#999999")
+
+occ_prestige_reg_plot <- bind_rows(model_1, model_2, model_3, model_4, model_5) %>% 
+  mutate(algorithm_cat = case_when(
+    algorithm == "abe_exact_conservative" ~ "ABE Exact",
+    algorithm == "abe_exact_standard" ~ "ABE Exact", 
+    algorithm == "abe_nysiis_conservative" ~ "ABE NYSIIS", 
+    algorithm == "abe_nysiis_standard" ~ "ABE NYSIIS", 
+    algorithm == "mlp" ~ "IPUMS MLP"
+  )) %>% 
+   mutate(type = case_when(
+    algorithm == "abe_exact_conservative" ~ "Conservative  ",
+    algorithm == "abe_exact_standard" ~ "Standard", 
+    algorithm == "abe_nysiis_conservative" ~ "Conservative  ", 
+    algorithm == "abe_nysiis_standard" ~ "Standard", 
+    algorithm == "mlp" ~ "Standard"
+  )) %>% 
+  filter(term == "occscore_1930") %>% 
+  ggplot(aes(x = reorder(algorithm_cat,-estimate), color = type, shape = type, y = estimate, ymin = estimate - 1.96*std.error, ymax = estimate + 1.96*std.error)) + 
+  geom_pointrange(fill = "white", size = 1, position = position_dodge2(0.2)) + 
+  theme_cowplot() + 
+  labs(x = "Algorithm",
+       y = "Regression Coefficient",
+       title = "Occupational Prestige") + 
+#  ylim(10, 15) + 
+  scale_shape_manual(values = c(21, 23)) + 
+  scale_color_manual(values = cud) +
+  theme(legend.position = "bottom", legend.title=element_blank()) +
+  ylim(0, 15) + 
+  geom_hline(aes(yintercept = mean(estimate)), color = "grey", linetype = "dashed")
+
+regression_plot <- cowplot::plot_grid(occ_prestige_reg_plot, regression_example_race)
+
+ggsave(plot = regression_plot, filename = here("figures/regression_plot.png"), width = 10, height = 5)
+```
+
