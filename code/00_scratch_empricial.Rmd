@@ -11,6 +11,10 @@ library(tidyverse)
 library(data.table)
 library(here)
 library(cowplot)
+
+## custom color schemes
+cudb <- c("#49b7fc", "#ff7b00", "#17d898", "#ff0083", "#0015ff", "#e5d200", "#999999")
+cud <- c("#D55E00", "#56B4E9", "#009E73", "#CC79A7", "#0072B2", "#E69F00", "#F0E442", "#999999")
 ```
 
 
@@ -75,31 +79,31 @@ linked_data_mlp_occ <- linked_data_mlp %>%
 
 abe_nysiis_conservative_change <- linked_data_abe_occ %>% 
   filter(abe_nysiis_conservative == 1) %>% 
-  summarize(rate = mean(abs(occ_decile_1930 - occ_decile_1940) > 5),
-            se = sqrt(mean(abs(occ_decile_1930 - occ_decile_1940) > 5) * (1-mean(abs(occ_decile_1930 - occ_decile_1940) > 5))/n()),
+  summarize(rate = mean(abs(occ_decile_1930 - occ_decile_1940) > 4),
+            se = sqrt(mean(abs(occ_decile_1930 - occ_decile_1940) > 4) * (1-mean(abs(occ_decile_1930 - occ_decile_1940) > 4))/n()),
             algorithm = "abe_nysiis_conservative") 
 
 abe_nysiis_standard_change <- linked_data_abe_occ %>% 
   filter(abe_nysiis_standard == 1) %>% 
-  summarize(rate = mean(abs(occ_decile_1930 - occ_decile_1940) > 5),
-            se = sqrt(mean(abs(occ_decile_1930 - occ_decile_1940) > 5) * (1-mean(abs(occ_decile_1930 - occ_decile_1940) > 5))/n()),
+  summarize(rate = mean(abs(occ_decile_1930 - occ_decile_1940) > 4),
+            se = sqrt(mean(abs(occ_decile_1930 - occ_decile_1940) > 4) * (1-mean(abs(occ_decile_1930 - occ_decile_1940) > 4))/n()),
             algorithm = "abe_nysiis_standard") 
 
 abe_exact_standard_change <- linked_data_abe_occ %>% 
   filter(abe_exact_standard == 1) %>% 
-  summarize(rate = mean(abs(occ_decile_1930 - occ_decile_1940) > 5),
-            se = sqrt(mean(abs(occ_decile_1930 - occ_decile_1940) > 5) * (1-mean(abs(occ_decile_1930 - occ_decile_1940) > 5))/n()),
+  summarize(rate = mean(abs(occ_decile_1930 - occ_decile_1940) > 4),
+            se = sqrt(mean(abs(occ_decile_1930 - occ_decile_1940) > 4) * (1-mean(abs(occ_decile_1930 - occ_decile_1940) > 4))/n()),
             algorithm = "abe_exact_standard")
 
 abe_exact_conservative_change <- linked_data_abe_occ %>% 
   filter(abe_exact_conservative == 1) %>% 
-  summarize(rate = mean(abs(occ_decile_1930 - occ_decile_1940) > 5),
-            se = sqrt(mean(abs(occ_decile_1930 - occ_decile_1940) > 5) * (1-mean(abs(occ_decile_1930 - occ_decile_1940) > 5))/n()),
+  summarize(rate = mean(abs(occ_decile_1930 - occ_decile_1940) > 4),
+            se = sqrt(mean(abs(occ_decile_1930 - occ_decile_1940) > 4) * (1-mean(abs(occ_decile_1930 - occ_decile_1940) > 4))/n()),
             algorithm = "abe_exact_conservative")
 
 mlp <- linked_data_mlp_occ %>% 
-  summarize(rate = mean(abs(occ_decile_1930 - occ_decile_1940) > 5),
-            se = sqrt(mean(abs(occ_decile_1930 - occ_decile_1940) > 5) * (1-mean(abs(occ_decile_1930 - occ_decile_1940) > 5))/n()),
+  summarize(rate = mean(abs(occ_decile_1930 - occ_decile_1940) > 4),
+            se = sqrt(mean(abs(occ_decile_1930 - occ_decile_1940) > 4) * (1-mean(abs(occ_decile_1930 - occ_decile_1940) > 4))/n()),
             algorithm = "mlp")
 
 results <- bind_rows(abe_nysiis_conservative_change, abe_nysiis_standard_change, abe_exact_standard_change, abe_exact_conservative_change, mlp)
@@ -124,12 +128,12 @@ mutate(algorithm_cat = case_when(
   theme_cowplot() + 
   labs(x = "Algorithm",
        y = ">50% percentile rank change",
-       title = "Social Mobility ") + 
-#  ylim(10, 15) + 
+       title = "Upward Occupational Prestige ") + 
   scale_shape_manual(values = c(21, 23)) + 
   scale_color_manual(values = cud) +
+  annotate("text", x = 1, y = .11, label = "Mean", vjust = -1, color = "grey") +
   theme(legend.position = "bottom", legend.title=element_blank()) +
-  scale_y_continuous(labels = scales::percent, limits = c(0, 0.09)) + 
+  scale_y_continuous(labels = scales::percent, limits = c(0, 0.13)) + 
   geom_hline(aes(yintercept = mean(rate)), color = "grey", linetype = "dashed")
 ```
 
@@ -207,13 +211,28 @@ ggsave(plot = transition_plot, filename = here("figures/transition_plot.png"), w
 ## race regression 
 
 ```{r}
-model_1 <- broom::tidy(lm(data = linked_data_mlp %>% filter(race_1930 == 100 | race_1930 == 200) %>% filter(incwage_1940 %in% c(1:5005)), incwage_1940 ~ as.factor(race_1930))) %>% mutate(algorithm = "mlp")
+model_1 <- broom::tidy(lm(data = linked_data_mlp %>%
+                            filter(race_1930 == 100 | race_1930 == 200) %>% 
+                            filter(incwage_1940 %in% c(1:5005)), incwage_1940 ~ as.factor(race_1930))) %>% 
+  mutate(algorithm = "mlp")
 
-model_2 <- broom::tidy(lm(data = linked_data_abe %>% filter(race_1930 == 100 | race_1930 == 200) %>% filter(abe_exact_conservative == 1) %>% filter(incwage_1940 %in% c(1:5005)), incwage_1940 ~ as.factor(race_1930))) %>% mutate(algorithm = "abe_exact_conservative")
+model_2 <- broom::tidy(lm(data = linked_data_abe %>% 
+                            filter(race_1930 == 100 | race_1930 == 200) %>% 
+                            filter(abe_exact_conservative == 1) %>% 
+                            filter(incwage_1940 %in% c(1:5005)), incwage_1940 ~ as.factor(race_1930))) %>% 
+  mutate(algorithm = "abe_exact_conservative")
 
-model_3 <- broom::tidy(lm(data = linked_data_abe %>% filter(race_1930 == 100 | race_1930 == 200) %>% filter(abe_exact_standard == 1) %>% filter(incwage_1940 %in% c(1:5005)), incwage_1940 ~ as.factor(race_1930))) %>% mutate(algorithm = "abe_exact_standard")
+model_3 <- broom::tidy(lm(data = linked_data_abe %>% 
+                            filter(race_1930 == 100 | race_1930 == 200) %>%
+                            filter(abe_exact_standard == 1) %>% 
+                            filter(incwage_1940 %in% c(1:5005)), incwage_1940 ~ as.factor(race_1930))) %>% 
+  mutate(algorithm = "abe_exact_standard")
 
-model_4 <- broom::tidy(lm(data = linked_data_abe %>% filter(race_1930 == 100 | race_1930 == 200) %>% filter(abe_nysiis_conservative == 1)  %>% filter(incwage_1940 %in% c(1:5005)), incwage_1940 ~ as.factor(race_1930)))  %>% mutate(algorithm = "abe_nysiis_conservative")
+model_4 <- broom::tidy(lm(data = linked_data_abe %>% 
+                            filter(race_1930 == 100 | race_1930 == 200) %>% 
+                            filter(abe_nysiis_conservative == 1)  %>% 
+                            filter(incwage_1940 %in% c(1:5005)), incwage_1940 ~ as.factor(race_1930)))  %>% 
+  mutate(algorithm = "abe_nysiis_conservative")
 
 model_5 <- broom::tidy(lm(data = linked_data_abe %>% filter(race_1930 == 100 | race_1930 == 200) %>% filter(abe_nysiis_standard == 1) %>% filter(incwage_1940 %in% c(1:5005)), incwage_1940 ~ as.factor(race_1930)))  %>% mutate(algorithm = "abe_nysiis_standard")
 
