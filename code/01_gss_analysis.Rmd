@@ -1,0 +1,28 @@
+---
+title: "GSS Comparison"
+author: Casey Breen
+---
+
+GSS Comparison 
+
+
+```{r}
+library(tidyverse)
+library(here)
+
+
+gss <- haven::read_dta(here("data", "2022", "GSS2022.dta"))
+```
+
+
+
+```{r}
+gss %>% 
+  count(sex)
+
+
+gss %>% 
+  count(race)
+
+```
+

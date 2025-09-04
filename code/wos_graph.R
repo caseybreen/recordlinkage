@@ -12,6 +12,8 @@ library(data.table)
 library(ggplot2)
 library(cowplot)
 library(grid)
+library(readxl)
+
 
 # Paths
 data_path   <- here("wos/data/")

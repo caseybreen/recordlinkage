@@ -1,0 +1,289 @@
+---
+title: "Changes in racial self-identification"
+author: Casey Breen
+---
+
+Summary: Investigate changes in racial self-identification 
+
+
+```{r}
+library(here)
+library(vroom)
+library(tidyverse)
+library(data.table)
+library(broom)
+source(here("code", "helpers.R"))
+```
+
+```{r}
+numident <- vroom(here("data", "censoc_numident_w_initials.csv.zip"), col_select = c("HISTID", "middle_A", "middle_B", "byear", "INCWAGE", "death_age", "SEX", "EDUC", "RACE", "RELATE", "MARST", "SEI", "link_abe_exact_conservative", "race_first"), progress = T) %>% 
+  janitor::clean_names()
+
+
+## Select First letter of middle name (census)
+numident$middle_name_census <- get_first_letter_lower(numident$middle_a)
+numident$middle_name_numident <- get_first_letter_lower(numident$middle_b)
+```
+
+
+```{r}
+numident <- numident %>% 
+  mutate(race_numident = case_when(
+    race_first == 1 ~ "White",
+    race_first == 2 ~ "Black"
+  )) %>% 
+  mutate(race_census = case_when(
+    race == 100 ~ "White",
+    race == 200 ~ "Black"
+  )) %>% 
+  filter(sex == 1)
+  
+```
+
+
+```{r}
+numident %>% 
+  filter(byear %in% c(1910:1920)) %>% 
+  filter(race_census == "Black") %>% 
+  group_by(link_abe_exact_conservative) %>% 
+  summarize(mean(race_numident == "White", na.rm = T))
+```
+
+
+
+```{r}
+false_match_rate <- numident %>% 
+  filter(link_abe_exact_conservative == 1) %>% 
+  filter(byear %in% c(1910:1920)) %>% 
+  filter(!is.na(middle_name_census) & !is.na(middle_name_numident)) %>% 
+  summarize(mean(middle_name_census == middle_name_numident)) %>% 
+  pull()
+
+f_r =  1 - false_match_rate 
+
+R_false <- numident %>% 
+  filter(link_abe_exact_conservative == 0) %>% 
+  filter(byear %in% c(1910:1920)) %>% 
+  filter(!is.na(middle_name_census) & !is.na(middle_name_numident)) %>% 
+  filter(middle_name_census != middle_name_numident) %>% 
+  filter(race_census == "Black") %>% 
+  summarize(mean(race_numident == "White", na.rm = T)) 
+
+
+R_obs <- numident %>% 
+  filter(link_abe_exact_conservative == 1) %>% 
+  filter(byear %in% c(1910:1920)) %>% 
+  filter(race_census == "Black") %>% 
+  summarize(mean(race_numident == "White", na.rm = T)) %>% 
+  pull()
+
+
+R_true <- (R_obs - R_false * f_r) / (1 - f_r)
+```
+
+
+
+```{r}
+false_match_rate <- numident %>% 
+  #filter(link_abe_exact_conservative == 1) %>% 
+  filter(byear %in% c(1910:1920)) %>% 
+  filter(!is.na(middle_name_census) & !is.na(middle_name_numident)) %>% 
+  summarize(mean(middle_name_census == middle_name_numident)) %>% 
+  pull()
+
+f_r =  1 - false_match_rate  
+
+R_false <- numident %>% 
+  #filter(link_abe_exact_conservative == 1) %>% 
+  filter(byear %in% c(1910:1920)) %>% 
+ filter(!is.na(middle_name_census) & !is.na(middle_name_numident)) %>% 
+  filter(middle_name_census !=  middle_name_numident) %>% 
+  filter(race_census == "Black") %>% 
+  summarize(mean(race_numident == "White", na.rm = T)) %>% 
+  pull()
+
+R_obs <- numident %>% 
+# filter(link_abe_exact_conservative == 1) %>% 
+  filter(byear %in% c(1910:1920)) %>% 
+  filter(race_census == "Black") %>% 
+  summarize(mean(race_numident == "White", na.rm = T)) %>% 
+  pull()
+
+R_true <- (R_obs - R_false * f_r) / (1 - f_r)
+R_true
+```
+
+
+
+```{r}
+adjust_passing_rate <- function(data, birth_year_range = 1910:1920, conservative = F) {
+  
+  filtered <- data %>%
+    filter(byear %in% birth_year_range)
+  
+  # Estimate false match rate
+  false_match_rate <- filtered %>%
+    filter(!is.na(middle_name_census) & !is.na(middle_name_numident)) %>%
+    summarize(match = mean(middle_name_census == middle_name_numident)) %>%
+    pull()
+  
+  f_r <- 1 - false_match_rate
+  
+  # R_false: passing rate among likely false matches
+  if (conservative == T) {
+  R_false <- filtered %>%
+    filter(link_abe_exact_conservative == 1) %>% 
+    filter(!is.na(middle_name_census) & !is.na(middle_name_numident)) %>%
+    filter(middle_name_census != middle_name_numident) %>%
+    filter(race_census == "Black") %>%
+    summarize(rate = mean(race_numident == "White", na.rm = TRUE)) %>%
+    pull() } else {
+    R_false <- filtered %>%
+    filter(!is.na(middle_name_census) & !is.na(middle_name_numident)) %>%
+    filter(middle_name_census != middle_name_numident) %>%
+    filter(race_census == "Black") %>%
+    summarize(rate = mean(race_numident == "White", na.rm = TRUE)) %>%
+    pull() 
+    }
+  
+  # R_obs: observed passing rate in full Black sample
+    R_obs <- filtered %>%
+    filter(race_census == "Black") %>%
+    summarize(rate = mean(race_numident == "White", na.rm = TRUE)) %>%
+    pull()
+  
+  # Bias-corrected true passing rate
+  R_true <- (R_obs - R_false * f_r) / (1 - f_r)
+  
+  return(data.frame(
+    R_true = R_true,
+    R_obs = R_obs,
+    R_false = R_false,
+    f_r = f_r,
+    adjustment_factor = R_true / R_obs
+  ))
+}
+```
+
+
+```{r}
+result <- adjust_passing_rate(numident, conservative = F)
+
+result_conservative <- adjust_passing_rate(numident %>% filter(link_abe_exact_conservative == 1))
+```
+
+
+```{r}
+bootstrap_adjust_passing_rate <- function(data, n_boot = 100, birth_year_range = 1910:1920) {
+  
+  pb <- progress_bar$new(
+    total = n_boot,
+    format = "Bootstrapping [:bar] :percent in :elapsed"
+  )
+  
+  results <- tibble(R_true = numeric(), R_obs = numeric())
+
+  for (i in 1:n_boot) {
+    pb$tick()
+    
+    sample_data <- data %>%
+      slice_sample(n = nrow(data), replace = TRUE)
+    
+    res <- tryCatch({
+      adjust_passing_rate(sample_data, birth_year_range)
+    }, error = function(e) NULL)
+    
+    if (!is.null(res)) {
+      results <- add_row(results, R_true = res$R_true, R_obs = res$R_obs)
+    }
+  }
+  
+  results %>%
+    summarize(
+      adj_mean = mean(R_true),
+      adj_lower_ci = quantile(R_true, 0.025),
+      adj_upper_ci = quantile(R_true, 0.975),
+      obs_mean = mean(R_obs),
+      obs_lower_ci = quantile(R_obs, 0.025),
+      obs_upper_ci = quantile(R_obs, 0.975)
+    )
+}
+```
+
+
+
+```{r}
+library(progress)
+
+# Full sample bootstrap
+bootstrap_result <- bootstrap_adjust_passing_rate(numident)
+
+# Conservative link sample bootstrap
+bootstrap_result_conservative <- bootstrap_adjust_passing_rate(
+  numident %>% filter(link_abe_exact_conservative == 1))
+
+bootstrap_result_standard_not_conservative <- bootstrap_adjust_passing_rate(
+  numident %>% filter(link_abe_exact_conservative == 0))
+```
+
+
+
+```{r}
+bootstrap_result <- bootstrap_result %>% 
+  mutate(link_method = "ABE Standard")
+
+bootstrap_result_conservative <- bootstrap_result_conservative %>% 
+  mutate(link_method = "ABE Conservative")
+
+bootstrap_result_standard_not_conservative <- bootstrap_result_standard_not_conservative %>% 
+  mutate(link_method = "ABE Standard, Not Conservative")
+
+bootstrap_result_conservative
+
+fastlink <- data.frame(adj_mean = 0.069988233,
+      adj_lower_ci = 0.06423506,
+      adj_upper_ci = 0.075646609,
+      obs_mean = 0.225058437,
+      obs_lower_ci = 0.221697057,
+      obs_upper_ci = 0.228326108) %>% 
+    mutate(link_method = "Fastlink")
+
+  
+results <- bind_rows(bootstrap_result, bootstrap_result_conservative, fastlink, bootstrap_result_standard_not_conservative)
+
+results_long <- results %>%
+  pivot_longer(
+    cols = starts_with("adj_"):starts_with("obs_"),
+    names_to = c("type", ".value"),
+    names_pattern = "(adj|obs)_(.*)"
+  )
+
+results_long_filter <- results_long %>% 
+  filter(link_method %in% c("ABE Conservative", "Fastlink"))  
+
+mean_adj <- results_long_filter %>% 
+  filter(type == "adj") %>% 
+  summarize(mean(mean)) %>% pull()
+
+passing_fig <- results_long %>% 
+    mutate(type = recode(type, adj = "Adjusted", obs = "Observed")) %>% 
+ # filter(link_method %in% c("ABE Conservative", "Fastlink"))  %>% 
+  ggplot(aes(x = link_method, y = mean, ymin = lower_ci, ymax = upper_ci, color = type)) +
+  geom_pointrange(position = position_dodge(width = 0.4), size = 1) +
+  labs(
+    y = "Passing Rate",
+    x = "Linking Method",
+    color = "Estimate Type"
+  ) +
+  cowplot::theme_cowplot() + 
+  ylim(0, .5) + 
+  theme(legend.position = "bottom", legend.title = element_blank()) + 
+  geom_hline(yintercept = mean_adj, linetype = "dashed") + 
+  ggsci::scale_color_lancet()
+  
+
+ggsave(plot = passing_fig, filename = here("figures", "passing_fig.png"), bg = "white", height = 4.5, width = 9)
+```
+
+
+
