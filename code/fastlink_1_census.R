@@ -1,9 +1,9 @@
 #########################
 # AUTHOR: Won-tak Joo   #
-# DATE:   2025-08-10    #
+# DATE:   2025-09-10    #
 #########################
 
-# 1940 Census data ("fastlink/data/census_1940.csv") include the following variables:
+# 1940 Census data ("data/fastlink/raw/census_1940.csv") include the following variables:
 # ("serialp", "pernum", "age", "sex", "race", "marst", "bpl", "birthyr", "namelast", "namefrst", "histid")
 
 # Load libraries
@@ -11,8 +11,8 @@ library(here)
 library(data.table)
 
 # Paths
-data_path         <- here("fastlink/data/")
-out_census_path   <- here("fastlink/split/")
+data_path         <- here("data/fastlink/raw/")
+out_census_path   <- here("data/fastlink/split/")
 
 dir.create(out_census_path, showWarnings=FALSE)
 
@@ -46,3 +46,4 @@ for (i in bpl){
 
 # Clean up after yourself
 rm(list = ls())
+
