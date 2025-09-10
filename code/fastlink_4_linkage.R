@@ -1,6 +1,6 @@
 #########################
 # AUTHOR: Won-tak Joo   #
-# DATE:   2025-08-10    #
+# DATE:   2025-09-10    #
 #########################
 
 # Load libraries
@@ -9,9 +9,9 @@ library(data.table)
 library(fastLink)
 
 # Paths
-census_path  <- here("fastlink/cleaned")
-data_path    <- here("fastlink/data")
-out_path     <- here("fastlink/flink")
+census_path  <- here("data/fastlink/cleaned")
+data_path    <- here("data/fastlink/raw")
+out_path     <- here("data/fastlink/flink")
 
 dir.create(out_path, showWarnings=FALSE)
 
@@ -151,3 +151,4 @@ fwrite(flink, paste0(out_path, "merged.csv"))
 
 # Clean up after yourself
 rm(list = ls())
+
