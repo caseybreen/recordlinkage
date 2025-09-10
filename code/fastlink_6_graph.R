@@ -1,6 +1,6 @@
 #########################
 # AUTHOR: Won-tak Joo   #
-# DATE:   2025-08-10    #
+# DATE:   2025-09-10    #
 #########################
 
 # Load libraries
@@ -12,7 +12,7 @@ library(scales)
 
 # Paths
 result_path   <- here("result/fastlink/")
-graph_path    <- here("data/fastlink/graph/")
+graph_path    <- here("result/fastlink/graph/")
 dir.create(graph_path, showWarnings=FALSE)
 
 # set seed
@@ -85,4 +85,5 @@ rm(passing, passing_boot, gr)
 
 # clean
 rm(list=ls())
+
 
