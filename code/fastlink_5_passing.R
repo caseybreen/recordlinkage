@@ -1,6 +1,6 @@
 #########################
 # AUTHOR: Won-tak Joo   #
-# DATE:   2025-08-10    #
+# DATE:   2025-09-10    #
 #########################
 
 # for those who don't have the 1940 Census with name strings and/or NUMIDENT data:
@@ -13,8 +13,8 @@ library(fastLink)
 library(matrixStats)
 
 # Paths
-flink_path  <- here("fastlink/flink")
-result_path <- here("fastlink/result")
+flink_path  <- here("data/fastlink/flink/")
+result_path <- here("data/fastlink/result/")
 
 dir.create(result_path, showWarnings=FALSE)
 
@@ -246,3 +246,4 @@ rm(passing_boot)
 
 # Clean up after yourself
 rm(list = ls())
+
