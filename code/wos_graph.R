@@ -1,6 +1,6 @@
 #########################
 # AUTHOR: Won-tak Joo   #
-# DATE:   2025-08-10    #
+# DATE:   2025-09-10    #
 #########################
 
 # list of articles are retrieved on 6/7/2025 at the WOS website (https://www.webofscience.com/wos/woscc/basic-search)
@@ -16,8 +16,8 @@ library(readxl)
 
 
 # Paths
-data_path   <- here("wos/data/")
-graph_path    <- here("wos/graph/")
+data_path   <- here("data/wos/")
+graph_path  <- here("result/wos/graph/")
 dir.create(graph_path, showWarnings=FALSE)
 
 # set seed
