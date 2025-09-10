@@ -1,6 +1,6 @@
 #########################
 # AUTHOR: Won-tak Joo   #
-# DATE:   2025-08-10    #
+# DATE:   2025-09-10    #
 #########################
 
 # Load libraries
@@ -10,9 +10,9 @@ library(tidyverse)
 library(data.table)
 
 # Paths
-source_path      <- here("fastlink/source")
-in_census_path   <- here("fastlink/split")
-out_census_path  <- here("fastlink/cleaned")
+source_path      <- here("data/fastlink/source/")
+in_census_path   <- here("data/fastlink/split/")
+out_census_path  <- here("data/fastlink/cleaned/")
 
 dir.create(out_census_path, showWarnings=FALSE)
 
@@ -39,3 +39,4 @@ for (file_name in list.files(in_census_path)) {
 
 # Clean up after yourself
 rm(list = ls())
+
