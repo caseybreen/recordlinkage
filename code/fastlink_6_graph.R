@@ -11,8 +11,8 @@ library(cowplot)
 library(scales)
 
 # Paths
-result_path   <- here("fastlink/result/")
-graph_path    <- here("fastlink/graph/")
+result_path   <- here("result/fastlink/")
+graph_path    <- here("data/fastlink/graph/")
 dir.create(graph_path, showWarnings=FALSE)
 
 # set seed
@@ -85,3 +85,4 @@ rm(passing, passing_boot, gr)
 
 # clean
 rm(list=ls())
+
