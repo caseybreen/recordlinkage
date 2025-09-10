@@ -1,6 +1,6 @@
 #########################
 # AUTHOR: Won-tak Joo   #
-# DATE:   2025-08-10    #
+# DATE:   2025-09-10    #
 #########################
 
 # BUNMD v2 and BUNMD clean names V1 are located in the data path
@@ -10,7 +10,7 @@ library(here)
 library(data.table)
 
 # Paths
-data_path <- here("fastlink/data")
+data_path <- here("data/fastlink/raw/")
 
 bunmd <- fread(paste0(data_path, "bunmd_v2.csv"),
                select=c("ssn", "byear", "bmonth", "sex",
@@ -30,3 +30,4 @@ fwrite(bunmd, paste0(data_path, "bunmd_name.csv"))
 
 ########## end
 rm(list=ls())
+
