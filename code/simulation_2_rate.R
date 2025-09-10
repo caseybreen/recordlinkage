@@ -1,6 +1,6 @@
 #########################
 # AUTHOR: Won-tak Joo   #
-# DATE:   2025-08-10    #
+# DATE:   2025-09-10    #
 #########################
 
 # Load libraries
@@ -11,7 +11,7 @@ library(doParallel)
 library(matrixStats)
 
 # Paths
-result_path <- here("simulation/result/rate/")
+result_path <- here("result/simulation/rate/")
 dir.create(result_path, showWarnings=FALSE)
 
 # set seed
@@ -204,4 +204,5 @@ for (mr in merror){
 }
 
 ########## end
+
 rm(list=ls())
