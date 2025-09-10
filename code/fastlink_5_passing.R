@@ -14,7 +14,7 @@ library(matrixStats)
 
 # Paths
 flink_path  <- here("data/fastlink/flink/")
-result_path <- here("data/fastlink/result/")
+result_path   <- here("result/fastlink/")
 
 dir.create(result_path, showWarnings=FALSE)
 
@@ -246,4 +246,5 @@ rm(passing_boot)
 
 # Clean up after yourself
 rm(list = ls())
+
 
