@@ -1,6 +1,6 @@
 #########################
 # AUTHOR: Won-tak Joo   #
-# DATE:   2025-08-10    #
+# DATE:   2025-09-10    #
 #########################
 
 # Load libraries
@@ -11,8 +11,8 @@ library(cowplot)
 library(grid)
 
 # Paths
-result_path   <- here("simulation/result/")
-graph_path    <- here("simulation/graph/")
+result_path <- here("result/simulation/")
+graph_path  <- here("result/simulation/graph/")
 dir.create(graph_path, showWarnings=FALSE)
 
 # set seed
@@ -212,3 +212,4 @@ rm(gr, gr1, gr2)
 
 # clean
 rm(list=ls())
+
