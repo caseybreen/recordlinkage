@@ -11,7 +11,7 @@ library(doParallel)
 library(matrixStats)
 
 # Paths
-result_path <- here("simulation/result/reg/")
+result_path <- here("result/simulation/reg/")
 dir.create(result_path, showWarnings=FALSE)
 
 # set seed
@@ -256,4 +256,5 @@ for (mr in merror){
 }
 
 ########## end
+
 rm(list=ls())
