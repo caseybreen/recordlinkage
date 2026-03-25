@@ -1,9 +1,9 @@
 #########################
 # AUTHOR: Won-tak Joo   #
-# DATE:   2025-09-10    #
+# DATE:   2025-08-10    #
 #########################
 
-# list of articles are retrieved on 6/7/2025 at the WOS website (https://www.webofscience.com/wos/woscc/basic-search)
+# list of articles are retrieved on 3/22/2026 at the WOS website (https://www.webofscience.com/wos/woscc/basic-search)
 # WOS files are located in the data path
 
 # Load libraries
@@ -12,8 +12,6 @@ library(data.table)
 library(ggplot2)
 library(cowplot)
 library(grid)
-library(readxl)
-
 
 # Paths
 data_path   <- here("data/wos/")
@@ -25,9 +23,9 @@ set.seed(1234)
 
 ########## WOS trends
 
-wos1 <- read_excel(paste0(data_path, "full_21.xls"))
-wos2 <- read_excel(paste0(data_path, "full_22.xls"))
-wos3 <- read_excel(paste0(data_path, "full_23.xls"))
+wos1 <- read_excel(paste0(data_path, "full_1.xls"))
+wos2 <- read_excel(paste0(data_path, "full_2.xls"))
+wos3 <- read_excel(paste0(data_path, "full_3.xls"))
 
 wos <- as.data.table(rbind(wos1, wos2, wos3))
 rm(wos1, wos2, wos3)
@@ -52,7 +50,7 @@ des <- des[order(year)]
 
 fwrite(des, paste0(result_path, "wos.csv"))
 
-gr1 <- ggplot(des[year>=1990 & year<=2024], aes(x=year)) +
+gr1 <- ggplot(des[year>=1990 & year<=2025], aes(x=year)) +
   geom_col(aes(y=total, fill="Social Science")) +
   geom_col(aes(y=dse, fill="Dem/Soc/Econ")) +
   xlab("Year") + ylab("Article Count") +
@@ -63,7 +61,7 @@ gr1 <- ggplot(des[year>=1990 & year<=2024], aes(x=year)) +
   theme_cowplot() +
   theme(legend.position="bottom", legend.key.size=unit(0.5, "line"), legend.key.spacing.x=unit(15, "pt"))
 
-gr2 <- ggplot(des[year>=1990 & year<=2024], aes(x=year)) +
+gr2 <- ggplot(des[year>=1990 & year<=2025], aes(x=year)) +
   geom_col(aes(y=dse, fill="Dem/Soc/Econ")) +
   xlab("Year") + ylab("Article Count") +
   scale_fill_manual(name="",
