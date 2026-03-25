@@ -1,6 +1,6 @@
 #########################
 # AUTHOR: Won-tak Joo   #
-# DATE:   2025-08-10    #
+# DATE:   2026-03-22    #
 #########################
 
 # list of articles are retrieved on 3/22/2026 at the WOS website (https://www.webofscience.com/wos/woscc/basic-search)
