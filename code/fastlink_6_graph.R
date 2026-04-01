@@ -47,7 +47,7 @@ gr <- ggplot(passing, aes(x=q)) +
   theme_cowplot() +
   theme_minimal() +
   theme(legend.position="bottom", legend.justification="center")
-ggsave(paste0(graph_path, "passing_continous.png"), plot=gr, width=7, height=5, bg="transparent")
+ggsave(paste0(graph_path, "Figure_A2.png"), plot=gr, width=7, height=5, bg="transparent")
 
 rm(passing, passing_boot, gr)
 
