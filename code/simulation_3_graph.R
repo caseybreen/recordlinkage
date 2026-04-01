@@ -40,7 +40,7 @@ gr0 <- ggplot(res[pre==1], aes(x=miss)) +
          fill="none") +
   theme_cowplot() +
   theme(legend.position="none")
-ggsave(paste0(graph_path, "Figure_3.png"), plot=gr0, width=5, height=5, bg="transparent")
+ggsave(paste0(graph_path, "Figure_A1.png"), plot=gr0, width=5, height=5, bg="transparent")
 rm(gr0)
 
 yint <- res$betat2[1]
@@ -143,7 +143,7 @@ gr <- plot_grid(gr1 + xlab(" ") +
                   guides(color=guide_legend(override.aes=list(alpha = 0, color ="transparent"))),
                 labels = c("       a.", "     b.", "     c."),
                 nrow=1, rel_widths = c(1.05, 1, 1))
-ggsave(paste0(graph_path, "appendix_missed.png"), plot=gr, width=12, height=5, bg="transparent")
+ggsave(paste0(graph_path, "Figure_3.png"), plot=gr, width=12, height=5, bg="transparent")
 
 gr1 <- gr1 + xlab(" ") +
   theme(legend.text = element_text(color = "transparent"),
@@ -159,9 +159,9 @@ gr3 <- gr3 + xlab(" ") + ylab(" ") +
         legend.text = element_text(color = "transparent"),
         legend.key = element_rect(fill = "transparent")) +
   guides(color=guide_legend(override.aes=list(alpha = 0, color ="transparent")))
-ggsave(paste0(graph_path, "appendix_missed_1.png"), plot=gr1, width=4, height=5, bg="transparent")
-ggsave(paste0(graph_path, "appendix_missed_2.png"), plot=gr2, width=4, height=5, bg="transparent")
-ggsave(paste0(graph_path, "appendix_missed_3.png"), plot=gr3, width=4, height=5, bg="transparent")
+ggsave(paste0(graph_path, "Figure_3a.png"), plot=gr1, width=4, height=5, bg="transparent")
+ggsave(paste0(graph_path, "Figure_3b.png"), plot=gr2, width=4, height=5, bg="transparent")
+ggsave(paste0(graph_path, "Figure_3c.png"), plot=gr3, width=4, height=5, bg="transparent")
 rm(gr, gr1, gr2, gr3)
 
 ##### false match
