@@ -40,7 +40,6 @@ numident %>%
             mean(!is.na(middle_name_census) & !is.na(middle_name_numident)))
 ```
 
-
 ```{r}
 censoc_numident_middle <- numident %>% 
   filter(sex == 1) %>% 
@@ -129,14 +128,12 @@ association_between_educ_and_longevity <- education_standard %>%
   theme(legend.position = "bottom") + 
   ylim(0, 0.15) + 
   labs(x = "Match Method",
-       y = "Coefficient",
-       title = "Association between years of education and longevity (OLS)",
-       subtitle = "CenSoc-Numident, Birth cohorts of 1900-1920 (Men Only)",
+       y = "Regression coefficient",
        col = "Middle Initial Agreement",
        shape = "Middle Initial Agreement")
 
 ## save plot 
-ggsave(association_between_educ_and_longevity, filename = here("figures", "numident_association_between_educ_and_longevity.pdf"), height = 6, width = 8.5)
+ggsave(association_between_educ_and_longevity, filename = here("figures", "numident_association_between_educ_and_longevity.png"), bg = "white", height = 5, width = 6.5)
 ```
 
 
@@ -286,8 +283,6 @@ passing_fig <- passing_rates %>%
   labs(
     x = "Match Method",
     y = "Rate of Stability (White → White)",
-    title = "Rates of Apparent Racial Stability Among White Men",
-    subtitle = "CenSoc-Numident, Birth cohorts 1900–1920",
     color = "Middle Initial Agreement",
     shape = "Middle Initial Agreement"
   ) #+ 

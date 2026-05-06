@@ -1,0 +1,255 @@
+---
+title: "Record Linkage Analysis"
+author: Casey Breen
+---
+
+Summary: Investigate how choice of record linkage algorithm affects research results 
+
+```{r}
+## library packages 
+library(tidyverse)
+library(data.table) 
+library(here)
+library(cowplot)
+
+## custom color schemes
+cudb <- c("#49b7fc", "#ff7b00", "#17d898", "#ff0083", "#0015ff", "#e5d200", "#999999")
+cud <- c("#D55E00", "#56B4E9", "#009E73", "#CC79A7", "#0072B2", "#E69F00", "#F0E442", "#999999")
+```
+
+```{r}
+## occupation crosswalk (1950occ -> microclasses)
+occupation_crosswalk <- fread(here("data", "occ1950_mc_xwalk_70.csv"))
+
+## occ rank 
+occ_classes <- fread(here("data", "ipums_data_occ_rank.csv"))
+
+## occ classes 
+occ_rank_1920 <- occ_classes[cohort == 1920, .(microocc, prank_1920 = prank)]
+occ_rank_1940 <- occ_classes[cohort == 1940, .(microocc, prank_1940 = prank)]
+
+## rank occupation classes 
+occ_rank_1920 <- occ_rank_1920 %>% left_join(occupation_crosswalk %>% select(microocc, occ1950, occ1950_label))
+occ_rank_1940 <- occ_rank_1940 %>% left_join(occupation_crosswalk %>% select(microocc, occ1950, occ1950_label))
+```
+
+```{r}
+## read in census data 
+## 1920: identify father-son pairs
+roster_1920 <- fread("~/workspace/data/1920/P.tsv",
+                     select = c("SERIALP", "PERNUM", "RELATE", "SEX", "AGE", 
+                                "HISTID", "OCC1950")) %>% 
+  janitor::clean_names()
+
+fathers_1920 <- roster_1920 %>% 
+  filter(relate == 101, sex == 1, age >= 30, age <= 55) %>% 
+  select(serialp, occ1950_father_1920 = occ1950, age_father_1920 = age)
+
+sons_1920 <- roster_1920 %>% 
+  filter(relate == 301, sex == 1, age <= 15) %>% 
+  inner_join(fathers_1920, by = "serialp") %>% 
+  rename_all(~ paste(., "1920", sep = "_"))
+
+rm(roster_1920)
+
+census_1940 <- fread("~/workspace/data/1940/P.tsv",
+                     select = c("SEX", "AGE", "HISTID", "OCC1950")) %>% 
+  janitor::clean_names() %>% 
+  filter(sex == 1, age >= 25, age <= 45) %>% 
+  rename_all(~ paste(., "1940", sep = "_"))
+
+rm(fathers_1920)
+```
+
+
+```{r}
+## mlp crosswalk 
+mlp <- fread("~/workspace/data/crosswalks/mlp_census_crosswalk_v2_0.csv", select = c("histid_1940", "histid_1920")) %>%
+  filter(histid_1940 != "" & histid_1920 != "")
+
+## abe crosswalk 
+abe <- fread("~/workspace/data/crosswalks/clp_1920_1940_xwalk/crosswalk_1920_1940.csv")
+```
+
+```{r}
+## ---- Link sons_1920 -> 1940 via each crosswalk -----------------------------
+## ABE: crosswalk has histid_1920, histid_1940, and the four indicator columns
+linked_intergen_abe <- sons_1920 %>%
+  inner_join(abe, by = c("histid_1920" = "histid_1920")) %>%
+  inner_join(census_1940,   by = c("histid_1940" = "histid_1940"))
+
+## MLP: same idea, different crosswalk file
+linked_intergen_mlp <- sons_1920 %>%
+  inner_join(mlp, by = c("histid_1920" = "histid_1920")) %>%
+  inner_join(census_1940,   by = c("histid_1940" = "histid_1940"))
+```
+```{r}
+## remove some stuff 
+rm(abe, mlp)
+rm(census_1940, sons_1920)
+```
+
+
+
+```{r}
+## linked data abe 
+linked_intergen_abe <- linked_intergen_abe %>% 
+  left_join(occ_rank_1920, by = c("occ1950_father_1920_1920" = "occ1950")) %>% 
+  left_join(occ_rank_1940, by = c("occ1950_1940" = "occ1950"))
+
+linked_intergen_mlp <- linked_intergen_mlp %>% 
+  left_join(occ_rank_1920, by = c("occ1950_father_1920_1920" = "occ1950")) %>% 
+  left_join(occ_rank_1940, by = c("occ1950_1940" = "occ1950"))
+```
+
+
+```{r}
+ ## ---- Intergenerational regression slopes ----------------------------------
+get_slope_intergen <- function(df) {
+  m <- lm(prank_1940 ~ prank_1920, data = df)
+  tibble(
+    slope = coef(m)[["prank_1920"]],
+    se    = summary(m)$coefficients["prank_1920", "Std. Error"],
+    n     = nobs(m)
+  )
+}
+
+mlp_reg_inter <- get_slope_intergen(linked_intergen_mlp %>% filter(age_father_1920_1920 == age_1940)) %>% 
+  mutate(variant = "mlp")
+
+abe_reg_inter <- tibble(
+  variant = c("exact_conservative", "exact_standard", "nysiis_conservative", "nysiis_standard")
+) %>%
+  mutate(stats = list(
+    get_slope_intergen(linked_intergen_abe %>% filter(age_father_1920_1920 == age_1940) %>% filter(abe_exact_conservative  == 1)),
+    get_slope_intergen(linked_intergen_abe %>% filter(age_father_1920_1920 == age_1940) %>% filter(abe_exact_standard      == 1)),
+    get_slope_intergen(linked_intergen_abe %>% filter(age_father_1920_1920 == age_1940) %>% filter(abe_nysiis_conservative == 1)),
+    get_slope_intergen(linked_intergen_abe %>% filter(age_father_1920_1920 == age_1940) %>% filter(abe_nysiis_standard     == 1))
+  )) %>%
+  unnest(stats)
+
+intergenerational_mobility <- bind_rows(mlp_reg_inter, abe_reg_inter) %>% 
+  mutate(algorithm = variant)
+
+## ---- Plot ------------------------------------------------------------------
+intergen_mobility_shifts <- intergenerational_mobility %>% 
+  mutate(algorithm_cat = case_when(
+    algorithm == "exact_conservative"  ~ "ABE Exact",
+    algorithm == "exact_standard"      ~ "ABE Exact", 
+    algorithm == "nysiis_conservative" ~ "ABE NYSIIS", 
+    algorithm == "nysiis_standard"     ~ "ABE NYSIIS", 
+    algorithm == "mlp"                 ~ "IPUMS MLP"
+  )) %>% 
+  mutate(type = case_when(
+    algorithm == "exact_conservative"  ~ "Conservative  ",
+    algorithm == "exact_standard"      ~ "Standard", 
+    algorithm == "nysiis_conservative" ~ "Conservative  ", 
+    algorithm == "nysiis_standard"     ~ "Standard", 
+    algorithm == "mlp"                 ~ "Standard"
+  )) %>% 
+  ggplot(aes(x = reorder(algorithm_cat, -slope), color = type, shape = type, 
+             y = slope, ymin = slope - 1.96*se, ymax = slope + 1.96*se)) + 
+  geom_pointrange(fill = "white", size = 1, position = position_dodge2(0.2)) + 
+  theme_cowplot() + 
+  labs(x = "Algorithm",
+       y = "Rank-Rank Slope",
+       title = "Intergenerational Mobility: Rank-Rank Slope") + 
+  scale_shape_manual(values = c(21, 23)) + 
+  scale_color_manual(values = cud) +
+  annotate("text", x = 1.3, 
+           y = mean(intergenerational_mobility$slope) + 0.01, 
+           label = "Mean", vjust = -1, color = "grey") +
+  theme(legend.position = "bottom", legend.title = element_blank()) +
+  scale_y_continuous(labels = scales::percent, limits = c(0, .5)) + 
+  geom_hline(aes(yintercept = mean(slope)), color = "grey", linetype = "dashed")
+
+intergen_mobility_shifts
+```
+
+```{r}
+## ---- Intergenerational Bottom-20 -> Top-20 transition rate ----------------
+## Restricting to same age: father in 1920 and son in 1940 observed at same age
+LOW  <- 20
+HIGH <- 80
+
+get_q1q10_intergen <- function(df) {
+  df <- df %>% 
+    filter(!is.na(prank_1920), !is.na(prank_1940))
+  
+  bottom <- df %>% filter(prank_1920 < LOW)
+  n_bottom <- nrow(bottom)
+  n_made_it <- sum(bottom$prank_1940 > HIGH)
+  
+  ci <- if (n_bottom > 0) binom.test(n_made_it, n_bottom)$conf.int else c(NA, NA)
+  
+  tibble(
+    n_total      = nrow(df),
+    n_bottom     = n_bottom,
+    n_q1_to_q10  = n_made_it,
+    rate         = n_made_it / n_bottom,
+    rate_lo      = ci[1],
+    rate_hi      = ci[2],
+    se           = sqrt(rate * (1 - rate) / n_bottom)
+  )
+}
+
+mlp_q_inter <- get_q1q10_intergen(linked_intergen_mlp) %>% mutate(variant = "mlp")
+
+abe_q_inter <- tibble(
+  variant = c("exact_conservative", "exact_standard", "nysiis_conservative", "nysiis_standard")
+) %>%
+  mutate(stats = list(
+    get_q1q10_intergen(linked_intergen_abe %>% filter(abe_exact_conservative  == 1)),
+    get_q1q10_intergen(linked_intergen_abe %>% filter(abe_exact_standard      == 1)),
+    get_q1q10_intergen(linked_intergen_abe %>% filter(abe_nysiis_conservative == 1)),
+    get_q1q10_intergen(linked_intergen_abe %>% filter(abe_nysiis_standard     == 1))
+  )) %>%
+  unnest(stats)
+
+q1_to_q10_intergen <- bind_rows(mlp_q_inter, abe_q_inter) %>% 
+  mutate(algorithm = variant)
+
+q1_to_q10_intergen
+
+## ---- Plot ------------------------------------------------------------------
+rags_to_riches_intergen <- q1_to_q10_intergen %>% 
+  mutate(algorithm_cat = case_when(
+    algorithm == "exact_conservative"  ~ "ABE Exact",
+    algorithm == "exact_standard"      ~ "ABE Exact", 
+    algorithm == "nysiis_conservative" ~ "ABE NYSIIS", 
+    algorithm == "nysiis_standard"     ~ "ABE NYSIIS", 
+    algorithm == "mlp"                 ~ "IPUMS MLP"
+  )) %>% 
+  mutate(type = case_when(
+    algorithm == "exact_conservative"  ~ "Conservative  ",
+    algorithm == "exact_standard"      ~ "Standard", 
+    algorithm == "nysiis_conservative" ~ "Conservative  ", 
+    algorithm == "nysiis_standard"     ~ "Standard", 
+    algorithm == "mlp"                 ~ "Standard"
+  )) %>% 
+  ggplot(aes(x = reorder(algorithm_cat, rate), color = type, shape = type, 
+             y = rate, ymin = rate_lo, ymax = rate_hi)) + 
+  geom_pointrange(fill = "white", size = 1, position = position_dodge2(0.2)) + 
+  theme_cowplot() + 
+  labs(x = "Algorithm",
+ y = "Upward Mobility \n (Son Top 20%; Father Bottom 20%)",
+       title = "Intergenerational Mobility: Bottom-to-Top ") + 
+  scale_shape_manual(values = c(21, 23)) + 
+  scale_color_manual(values = cud) +
+  annotate("text", x = 1.3, y = mean(q1_to_q10_intergen$rate), 
+           label = "Mean", vjust = -1, color = "grey") +
+  theme(legend.position = "bottom", legend.title = element_blank()) +
+  scale_y_continuous(labels = scales::percent, limits = c(0, 0.07)) + 
+  geom_hline(aes(yintercept = mean(rate)), color = "grey", linetype = "dashed")
+
+rags_to_riches_intergen
+```
+
+
+
+```{r}
+intergenerational_plot <- cowplot::plot_grid(rags_to_riches_intergen, intergen_mobility_shifts, ncol = 1, labels = c("B", "D"))
+
+ggsave(plot = intergenerational_plot, filename = here("figures", "intergenerational_plot.png"), height = 10, width = 6)
+```
+

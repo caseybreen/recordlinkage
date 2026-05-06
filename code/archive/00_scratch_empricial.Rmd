@@ -34,13 +34,15 @@ census_1940 <- fread("~/IPUMS2019/1940/TSV/P.tsv", select = c("SEX", "HISTID", "
 
 ```{r}
 ## read in crosswalks 
-mlp <- fread("~/workspace/home-ownership/data/mlp_1930_1940_csv_v1_0/mlp_1930_1940_v1.0.csv", select = c("histid_1940", "histid_1930"))
+mlp <- fread("~/workspace/data/crosswalks/mlp_census_crosswalk_v2_0.csv", select = c("histid_1940", "histid_1920"))
 
-abe <- fread("/90days/casey/crosswalk_1930_1940.csv")
+mlp_test <- fread("~/workspace/data/crosswalks/mlp_census_crosswalk_v2_0.csv", nrows = 10)
+
+mlp <- mlp %>% 
+  filter(histid_1940 != "" & histid_1920 != "")
+
+abe <- fread("~/workspace/data/crosswalks/clp_1920_1940_xwalk/crosswalk_1920_1940.csv")
 ```
-
-
-
 
 ```{r}
 census_1930_30 <- census_1930 %>%
