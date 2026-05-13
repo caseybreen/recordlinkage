@@ -267,7 +267,7 @@ mean_adj <- results_long_filter %>%
 
 passing_fig <- results_long %>% 
     mutate(type = recode(type, adj = "Adjusted", obs = "Observed")) %>% 
-  filter(link_method %in% c("ABE Conservative", "Fastlink"))  %>% 
+ # filter(link_method %in% c("ABE Conservative", "Fastlink"))  %>% 
   ggplot(aes(x = link_method, y = mean, ymin = lower_ci, ymax = upper_ci, color = type)) +
   geom_pointrange(position = position_dodge(width = 0.4), size = 1) +
   labs(

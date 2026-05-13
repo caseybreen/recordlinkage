@@ -1,0 +1,124 @@
+---
+title: "Education with middle initial"
+author: Casey Breen
+---
+
+Summary: The code here produces an education-longevity middle initial validation analysis used for case study 2.
+
+
+```{r}
+## library packages 
+library(here)
+source(here("code", "helpers.R"))
+```
+
+```{r}
+numident <- vroom(here("data", "censoc_numident_w_initials.csv"), col_select = c("HISTID", "middle_A", "middle_B", "race_first", "byear", "INCWAGE", "death_age", "SEX", "EDUC", "RACE", "RELATE", "MARST", "SEI", "link_abe_exact_conservative"), progress = T) %>% 
+  janitor::clean_names()
+```
+
+
+```{r}
+## Select First letter of middle name (census)
+numident$middle_name_census <- get_first_letter_lower(numident$middle_a)
+numident$middle_name_numident <- get_first_letter_lower(numident$middle_b)
+```
+
+
+```{r}
+censoc_numident_middle <- numident %>% 
+  filter(sex == 1) %>% 
+  filter(!is.na(middle_name_census) & !is.na(middle_name_numident))
+
+
+censoc_numident_middle <- censoc_numident_middle %>% 
+  mutate(agreement = case_when(
+    middle_name_census == middle_name_numident ~ 1,
+    TRUE ~ 0))
+
+censoc_numident_middle <- censoc_numident_middle %>% 
+  recode_education(educ_var = 'educ')
+```
+
+
+
+```{r}
+censoc_numident_middle
+```
+
+
+
+
+```{r}
+standard <- censoc_numident_middle %>% 
+  filter(byear %in% 1900:1920)
+
+conservative <- censoc_numident_middle %>% 
+  filter(link_abe_exact_conservative == 1) %>% 
+  filter(byear %in% 1900:1920)
+
+standard_not_conservative <- censoc_numident_middle %>% 
+  filter(link_abe_exact_conservative == 0) %>% 
+  filter(byear %in% 1900:1920)
+
+education_standard <- standard %>% 
+  group_by(agreement) %>%
+  do(fitHour = tidy(lm(death_age ~ educ_yrs + as.factor(byear), data = .))) %>% 
+  unnest(fitHour) %>% 
+  mutate(method = "standard")
+
+education_conservative <- conservative %>% 
+  group_by(agreement) %>%
+  do(fitHour = tidy(lm(death_age ~ educ_yrs + as.factor(byear), data = .))) %>% 
+  unnest(fitHour) %>% 
+  mutate(method = "conservative")
+
+education_standard_conservative <- standard_not_conservative %>% 
+  group_by(agreement) %>%
+  do(fitHour = tidy(lm(death_age ~ educ_yrs + as.factor(byear), data = .))) %>% 
+  unnest(fitHour) %>% 
+  mutate(method = "standard, not conservative")
+
+education_pooled_standard <- tidy(lm(death_age ~ educ_yrs + as.factor(byear), standard)) %>% 
+  mutate(method = "standard") 
+
+education_pooled_conservative <- tidy(lm(death_age ~ educ_yrs + as.factor(byear), conservative)) %>% 
+  mutate(method = "conservative")
+
+education_pooled_standard_noconservative <- tidy(lm(death_age ~ educ_yrs + as.factor(byear), standard_not_conservative)) %>% 
+  mutate(method = "standard, not conservative")
+
+association_between_educ_and_longevity <- education_standard %>%  
+  bind_rows(education_conservative) %>% 
+  bind_rows(education_standard_conservative) %>% 
+  bind_rows(education_pooled_standard) %>% 
+  bind_rows(education_pooled_conservative) %>% 
+  bind_rows(education_pooled_standard_noconservative) %>% 
+  mutate(agreement = as.factor(agreement)) %>% 
+  filter(term == "educ_yrs") %>% 
+  mutate(agreement = case_when(
+    agreement == 1 ~ "Agree",
+    agreement == 0 ~"Disagree",
+    TRUE ~ "Pooled")) %>% 
+  ggplot(aes(x = method,
+             y = estimate, 
+             ymin = estimate - 1.96 * std.error,
+             ymax = estimate + 1.96*std.error,
+             color = agreement,
+             shape = agreement)) + 
+  geom_pointrange(position = position_dodge(0.1), fill = "white", size = 1) + 
+  scale_color_manual(values = cud) + 
+  scale_shape_manual(values = c("Agree" = 21, "Disagree" = 22, "Pooled" = 23)) + 
+  cowplot::theme_cowplot() + 
+  theme(legend.position = "bottom") + 
+  ylim(0, 0.15) + 
+  labs(x = "Match Method",
+       y = "Regression coefficient",
+       col = "Middle Initial Agreement",
+       shape = "Middle Initial Agreement")
+
+## save plot 
+ggsave(association_between_educ_and_longevity, filename = here("figures", "fig6_education_longevity.png"), bg = "white", height = 4, width = 7)
+```
+
+

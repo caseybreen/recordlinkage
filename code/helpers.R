@@ -1,3 +1,20 @@
+## LIBRARY packages 
+pacman::p_load(
+  tidyverse,
+  data.table,
+  cowplot,
+  broom,
+  vroom
+)
+
+
+
+## custom color schemes
+cudb <- c("#49b7fc", "#ff7b00", "#17d898", "#ff0083", "#0015ff", "#e5d200", "#999999")
+cud <- c("#D55E00", "#56B4E9", "#009E73", "#CC79A7", "#0072B2", "#E69F00", "#F0E442", "#999999")
+
+
+
 ## function for recoding education
 recode_education <- function(df, educ_var) {
   

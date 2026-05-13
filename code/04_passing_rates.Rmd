@@ -1,0 +1,321 @@
+---
+title: "Changes in racial self-identification (bias-corrected)"
+author: Casey Breen
+---
+
+Summary: Estimate raw and bias-adjusted racial passing rates (Black in 1940 Census
+→ White in Numident) 
+
+
+```{r setup}
+## library packages 
+library(here)
+source(here("code", "helpers.R"))
+```
+
+```{r load-data}
+numident <- vroom(
+  here("data", "censoc_numident_w_initials.csv.zip"),
+  col_select = c("HISTID", "middle_A", "middle_B", "byear", "INCWAGE",
+                 "death_age", "SEX", "EDUC", "RACE", "RELATE", "MARST",
+                 "SEI", "link_abe_exact_conservative", "race_first"),
+  progress = TRUE
+) %>%
+  janitor::clean_names()
+
+# First letter of middle name in each source
+numident$middle_name_census   <- get_first_letter_lower(numident$middle_a)
+numident$middle_name_numident <- get_first_letter_lower(numident$middle_b)
+```
+
+```{r recode}
+numident <- numident %>%
+  mutate(
+    race_numident = case_when(
+      race_first == 1 ~ "White",
+      race_first == 2 ~ "Black"
+    ),
+    race_census = case_when(
+      race == 100 ~ "White",
+      race == 200 ~ "Black"
+    )
+  ) %>%
+  filter(sex == 1)
+```
+
+```{r quick-check}
+# Sanity check: raw passing rates by ABE conservative flag
+numident %>%
+  filter(byear %in% 1910:1920, race_census == "Black") %>%
+  group_by(link_abe_exact_conservative) %>%
+  summarize(passing_rate = mean(race_numident == "White", na.rm = TRUE),
+            n = n())
+```
+
+## Core function: adjust passing rate within a single linked sample
+
+The function takes a data frame that is ALREADY restricted to the linked sample of
+interest (e.g., only ABE Standard links, or only ABE Conservative links). All three
+quantities in Equation 6 are computed on this same sample.
+
+```{r adjust-fn}
+adjust_passing_rate <- function(linked_data, birth_year_range = 1910:1920) {
+
+  # Full linked sample (cohort-restricted)
+  s_full <- linked_data %>%
+    filter(byear %in% birth_year_range)
+
+  # Validation subsample: records with both middle initials observed
+  s_val <- s_full %>%
+    filter(!is.na(middle_name_census) & !is.na(middle_name_numident))
+
+  # --- Quantities on the VALIDATION subsample ---
+  f_r <- s_val %>%
+    summarize(rate = mean(middle_name_census != middle_name_numident)) %>%
+    pull(rate)
+
+  R_obs_val <- s_full %>%
+    filter(race_census == "Black") %>%
+    summarize(rate = mean(race_numident == "White", na.rm = TRUE)) %>%
+    pull(rate)
+
+  R_false <- s_val %>%
+    filter(middle_name_census != middle_name_numident,
+           race_census == "Black") %>%
+    summarize(rate = mean(race_numident == "White", na.rm = TRUE)) %>%
+    pull(rate)
+
+  # R_hat_true: Eq. 6 applied to the validation subsample
+  R_hat_true <- (R_obs_val - R_false * f_r) / (1 - f_r)
+
+  # Adjustment factor from validation subsample
+  adjustment_factor <- R_hat_true / R_obs_val
+
+  # --- R' on the FULL linked sample (including records without middle initials) ---
+  R_prime <- s_full %>%
+    filter(race_census == "Black") %>%
+    summarize(rate = mean(race_numident == "White", na.rm = TRUE)) %>%
+    pull(rate)
+
+  # Eq. 7: scale R' by the adjustment factor
+  R_true <- R_prime * adjustment_factor
+
+  tibble(
+    R_true            = R_true,
+    R_prime           = R_prime,
+    R_hat_true        = R_hat_true,
+    R_obs_val         = R_obs_val,
+    R_false           = R_false,
+    f_r               = f_r,
+    adjustment_factor = adjustment_factor,
+    n_total           = nrow(s_full),
+    n_validation      = nrow(s_val)
+  )
+}
+```
+
+## Point estimates by linked sample
+
+```{r point-estimates}
+# ABE Standard = all conservative + standard-not-conservative links.
+# In the data, link_abe_exact_conservative is 0/1 indicating conservative status
+# AMONG records that are standard links. Adjust the filter below if your link
+# variable encoding differs.
+
+abe_standard <- numident %>%
+  filter(!is.na(link_abe_exact_conservative))   # i.e., is a standard link
+
+abe_conservative <- numident %>%
+  filter(link_abe_exact_conservative == 1)
+
+abe_std_not_cons <- numident %>%
+  filter(link_abe_exact_conservative == 0)
+
+result_standard         <- adjust_passing_rate(abe_standard)
+result_conservative     <- adjust_passing_rate(abe_conservative)
+result_std_not_cons     <- adjust_passing_rate(abe_std_not_cons)
+
+bind_rows(
+  result_standard     %>% mutate(link_method = "ABE Standard"),
+  result_conservative %>% mutate(link_method = "ABE Conservative"),
+  result_std_not_cons %>% mutate(link_method = "ABE Standard, Not Conservative")
+)
+```
+
+```{r}
+abe_standard %>% 
+  filter(byear %in% 1910:1920) %>% 
+  filter(!is.na(middle_name_census) & !is.na(middle_name_numident)) %>% 
+  summarize(mean(middle_name_census != middle_name_numident), n())
+
+abe_standard %>% 
+  filter(byear %in% 1910:1920) %>%
+  filter(!is.na(middle_name_census) & !is.na(middle_name_numident)) %>% 
+  filter(middle_name_census != middle_name_numident) %>% 
+  filter(!is.na(race_numident)) %>% 
+  filter(race_census == "Black") %>% 
+  count(race_numident) %>% 
+  mutate(prop = n / sum(n))
+
+abe_standard %>% 
+  filter(byear %in% 1910:1920) %>% 
+  filter(!is.na(race_numident)) %>% 
+  filter(race_census == "Black") %>% 
+  count(race_numident) %>% 
+  mutate(prop = n / sum(n))
+
+
+abe_standard %>% 
+  filter(byear %in% 1910:1920) %>% 
+  filter(!is.na(middle_name_census) & !is.na(middle_name_numident)) %>% 
+  filter(middle_name_census == middle_name_numident) %>% 
+  filter(!is.na(race_numident)) %>% 
+  filter(race_census == "Black") %>% 
+  count(race_numident) %>% 
+  mutate(prop = n / sum(n))
+  
+```
+
+
+
+## Bootstrap CIs
+
+The bootstrap resamples *within* a fixed linked sample, so f_r, R_obs, and R_false
+are all recomputed on the same resampled data each iteration — preserving the
+within-sample consistency required by Equation 6.
+
+```{r bootstrap-fn}
+bootstrap_adjust_passing_rate <- function(linked_data,
+                                          n_boot = 500,
+                                          birth_year_range = 1910:1920) {
+
+  pb <- progress_bar$new(
+    total = n_boot,
+    format = "Bootstrapping [:bar] :percent in :elapsed"
+  )
+
+  out <- vector("list", n_boot)
+
+  for (i in seq_len(n_boot)) {
+    pb$tick()
+
+    sample_data <- linked_data %>%
+      slice_sample(n = nrow(linked_data), replace = TRUE)
+
+    out[[i]] <- tryCatch(
+      adjust_passing_rate(sample_data, birth_year_range),
+      error = function(e) NULL
+    )
+  }
+
+  bind_rows(out) %>%
+    summarize(
+      adj_mean     = mean(R_true,  na.rm = TRUE),
+      adj_lower_ci = quantile(R_true, 0.025, na.rm = TRUE),
+      adj_upper_ci = quantile(R_true, 0.975, na.rm = TRUE),
+      obs_mean     = mean(R_obs,   na.rm = TRUE),
+      obs_lower_ci = quantile(R_obs,  0.025, na.rm = TRUE),
+      obs_upper_ci = quantile(R_obs,  0.975, na.rm = TRUE)
+    )
+}
+```
+
+```{r run-bootstrap}
+set.seed(20260507)
+
+bootstrap_standard <- bootstrap_adjust_passing_rate(abe_standard) %>%
+  mutate(link_method = "ABE Standard")
+
+bootstrap_conservative <- bootstrap_adjust_passing_rate(abe_conservative) %>%
+  mutate(link_method = "ABE Conservative")
+
+bootstrap_std_not_cons <- bootstrap_adjust_passing_rate(abe_std_not_cons) %>%
+  mutate(link_method = "ABE Standard, Not Conservative")
+```
+
+## Fastlink results (precomputed elsewhere using the same method)
+
+```{r fastlink}
+fastlink <- tibble(
+  adj_mean     = 0.069609,
+  adj_lower_ci = 0.063909,
+  adj_upper_ci = 0.07539,
+  obs_mean     = 0.225058437,
+  obs_lower_ci = 0.221697057,
+  obs_upper_ci = 0.228326108,
+  link_method  = "Fastlink"
+)
+```
+
+## Combine and plot
+
+```{r combine}
+results <- bind_rows(
+  bootstrap_standard,
+  bootstrap_conservative,
+  bootstrap_std_not_cons,
+  fastlink
+)
+
+results_long <- results %>%
+  pivot_longer(
+    cols = -link_method,
+    names_to  = c("type", ".value"),
+    names_pattern = "(adj|obs)_(.*)"
+  ) %>%
+  mutate(type = recode(type, adj = "Adjusted", obs = "Observed"))
+```
+
+```{r plot}
+# Reference line: average adjusted rate across the two methods shown in the main figure
+mean_adj <- results_long %>%
+  filter(link_method %in% c("ABE Conservative", "Fastlink"),
+         type == "Adjusted") %>%
+  summarize(m = mean(mean)) %>%
+  pull(m)
+
+passing_fig <- results_long %>%
+  filter(link_method %in% c("ABE Conservative", "Fastlink")) %>%
+  ggplot(aes(x = link_method, y = mean, ymin = lower_ci, ymax = upper_ci,
+             color = type)) +
+  geom_pointrange(position = position_dodge(width = 0.4), size = 1) +
+  geom_hline(yintercept = mean_adj, linetype = "dashed") +
+  labs(y = "Passing Rate", x = "Linking Method", color = "Estimate Type") +
+  ylim(0, 0.25) +
+  cowplot::theme_cowplot() +
+  theme(legend.position = "bottom", legend.title = element_blank()) +
+  ggsci::scale_color_lancet()
+
+ggsave(
+  plot = passing_fig,
+  filename = here("figures", "07_passing_fig.png"),
+  bg = "white", height = 4.5, width = 9
+)
+
+passing_fig
+```
+
+## Optional: appendix figure with all four samples
+
+```{r plot-all}
+passing_fig_all <- results_long %>%
+  ggplot(aes(x = link_method, y = mean, ymin = lower_ci, ymax = upper_ci,
+             color = type)) +
+  geom_pointrange(position = position_dodge(width = 0.4), size = 1) +
+  geom_hline(yintercept = mean_adj, linetype = "dashed") +
+  labs(y = "Passing Rate", x = "Linking Method", color = "Estimate Type") +
+  ylim(0, 0.50) +
+  cowplot::theme_cowplot() +
+  theme(legend.position = "bottom",
+        legend.title = element_blank(),
+        axis.text.x  = element_text(angle = 15, hjust = 1)) +
+  ggsci::scale_color_lancet()
+
+ggsave(
+  plot = passing_fig_all,
+  filename = here("figures", "07_passing_fig_all_methods.png"),
+  bg = "white", height = 4.5, width = 10
+)
+
+passing_fig_all
+```
